@@ -2884,7 +2884,7 @@ function editInbound(iid) {
   $id('ib-id').value = iid;
   $id('ib-name').value = ib.name || '';
   $id('ib-protocol').value = ib.protocol || 'vless';
-  $id('ib-sni').value = (ib.reality_settings || {}).sni || ib.server_name || ib.sni || 'is1-ssl.mzstatic.com';
+  $id('ib-sni').value = (ib.reality_settings || {}).sni || ib.server_name || ib.sni || 'gateway.icloud.com';
   $id('ib-dest').value = (ib.reality_settings || {}).dest || (ib.reality_settings || {}).target || ib.destination || '';
   var rs = ib.reality_settings || {};
   $id('ib-privkey').value = (rs || {}).private_key || '';
@@ -3015,7 +3015,7 @@ async function submitInbound(e) {
     // VLESS / TLS / Reality
     var network = $id('ib-network').value;
     var security = $id('ib-security').value;
-    var sni = $id('ib-sni').value || 'is1-ssl.mzstatic.com';
+    var sni = $id('ib-sni').value || 'gateway.icloud.com';
     var internalPort = parseInt($id('ib-port').value, 10);
     body.port = Number.isFinite(internalPort) && internalPort > 0 ? internalPort : 443;
     body.network = network;
@@ -3025,7 +3025,7 @@ async function submitInbound(e) {
       body.external_port = parseInt($id('ib-extport').value) || null;
       body.external_domain = $id('ib-extdomain').value || '';
       // Reality uses independent Destination/Target and Server Name/SNI fields.
-      var sniVal = $id('ib-sni').value.trim() || 'is1-ssl.mzstatic.com';
+      var sniVal = $id('ib-sni').value.trim() || 'gateway.icloud.com';
       var destVal = $id('ib-dest').value.trim();
       if (!destVal) destVal = sniVal + ':443';
       body.destination = destVal;
