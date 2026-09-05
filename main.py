@@ -1,3 +1,11 @@
+
+def generate_random_short_ids():
+    import secrets
+    return [
+        secrets.token_hex(4),  # 8 hex
+        secrets.token_hex(6),  # 12 hex
+        secrets.token_hex(8)   # 16 hex
+    ]
 import asyncio
 import json
 import os
@@ -51,6 +59,11 @@ _sys.modules.setdefault("main", _sys.modules[__name__])
 IRAN_TZ = ZoneInfo("Asia/Tehran")
 
 app = FastAPI(title="Spider Gateway", docs_url=None, redoc_url=None)
+
+@app.get("/health")
+async def health_check():
+    return {"status": "ok", "service": "SpiderPanel"}
+
 
 # Import and include xhttp_siz10 router - deferred until globals are defined
 xhttp_router = None
@@ -375,8 +388,8 @@ SETTINGS = {
     # Reality defaults (3x-ui style)
     "reality": {
         "port": 1234,
-        "dest": "is1-ssl.mzstatic.com:443",
-        "sni": "is1-ssl.mzstatic.com",
+        "dest": "gateway.icloud.com:443",
+        "sni": "gateway.icloud.com",
         "public_key": "",
         "private_key": "",
         "short_id": "5a3ff5a13d",
@@ -632,7 +645,7 @@ def _gen_reality_settings() -> dict:
             "public_key": pub,
             "short_id": secrets.token_hex(5)[:10],
             "spiderx": "/",
-            "dest": "is1-ssl.mzstatic.com:443",
+            "dest": "gateway.icloud.com:443",
             "mldsa65_seed": seed,
             "mldsa65_verify": verify,
         }
@@ -646,14 +659,14 @@ def _gen_reality_settings() -> dict:
             "public_key": pub_key,
             "short_id": secrets.token_hex(5)[:10],
             "spiderx": "/",
-            "dest": "is1-ssl.mzstatic.com:443",
+            "dest": "gateway.icloud.com:443",
             "mldsa65_seed": b64.b64encode(mldsa_seed).decode(),
             "mldsa65_verify": _gen_ml_dsa65(mldsa_seed),
         }
     except ImportError:
         return {
             "private_key": "", "public_key": "", "short_id": "5a3ff5a13d",
-            "spiderx": "/", "dest": "is1-ssl.mzstatic.com:443",
+            "spiderx": "/", "dest": "gateway.icloud.com:443",
             "mldsa65_seed": b64.b64encode(mldsa_seed).decode(),
             "mldsa65_verify": _gen_ml_dsa65(mldsa_seed),
         }
@@ -1054,7 +1067,7 @@ async def startup():
                 "security": "reality",
                 "domain": "",
                 "external_domain": "",
-                "sni": "is1-ssl.mzstatic.com",
+                "sni": "gateway.icloud.com",
                 "external_port": "",
                 "fingerprint": "chrome",
                 "reality_settings": rs,
@@ -1248,8 +1261,8 @@ async def startup():
             logger.info("Reality inbound «%s» backfilled with pbk", _ib.get("name"))
         _rs.setdefault("short_id", _gs_rs.get("short_id") or secrets.token_hex(5)[:10])
         _rs.setdefault("spiderx", "/")
-        _rs.setdefault("dest", "is1-ssl.mzstatic.com:443")
-        _rs.setdefault("sni", "is1-ssl.mzstatic.com")
+        _rs.setdefault("dest", "gateway.icloud.com:443")
+        _rs.setdefault("sni", "gateway.icloud.com")
         # Internal and external ports are intentionally separate.
         # Xray MUST listen on internal `port`; the client connects to
         # external_domain:external_port (for example a Railway TCP proxy).
@@ -1783,8 +1796,8 @@ def generate_user_config(user_id: str, user: dict, inbound_id: str = None, addr:
         pbk = _xray_x25519_public_key(priv_key) if priv_key else (rs.get("public_key") or gs.get("public_key") or "")
         sid = rs.get("short_id") or rs.get("short_ids") or gs.get("short_id") or ""
         spx = rs.get("spiderx") or gs.get("spiderx") or "/"
-        fp = inbound.get("fingerprint") or rs.get("fingerprint") or gs.get("fingerprint") or "chrome"
-        sni = inbound.get("sni") or rs.get("sni") or gs.get("sni") or "is1-ssl.mzstatic.com"
+        fp = "chrome"
+        sni = inbound.get("sni") or rs.get("sni") or gs.get("sni") or "gateway.icloud.com"
         xs = inbound.get("xhttp_settings") or {}
         # Client and server must use the exact same XHTTP path.
         rpath = str(xs.get("path") or "/").strip()
@@ -1811,7 +1824,7 @@ def generate_user_config(user_id: str, user: dict, inbound_id: str = None, addr:
             extra = quote('{{"xPaddingBytes":"{}","mode":"{}","scMaxEachPostBytes":"{}"}}'.format(xpb, xmod, xsc), safe='')
             # Share-link follows the client template: no server-side dest/serverName
             # parameters are exposed. SNI is the independent Server Name field.
-            client_sni = str(rs.get("sni") or rs.get("server_name") or sni or "is1-ssl.mzstatic.com").strip()
+            client_sni = str(rs.get("sni") or rs.get("server_name") or sni or "gateway.icloud.com").strip()
             rpath_q = quote(rpath, safe="")
             params = (f"mode={quote(xmod, safe='')}&path={rpath_q}"
                       f"&security=reality&encryption=none"
@@ -3153,7 +3166,7 @@ async def create_inbound(request: Request, _=Depends(require_auth)):
             or (reality_settings.get("server_names") or [None])[0]
             or server_name
             or sni
-            or "is1-ssl.mzstatic.com"
+            or "gateway.icloud.com"
         ).strip()
         server_name_value = _normalize_reality_sni(server_name_value)
         dest_value = _normalize_reality_destination(dest_value or (server_name_value + ":443"))
@@ -3268,7 +3281,7 @@ async def update_inbound(inbound_id: str, request: Request, _=Depends(require_au
             rs.setdefault("spiderx", "/")
             # Keep target/destination and server-name/SNI independent.
             legacy_dest = str(rs.get("dest") or rs.get("target") or ib.get("destination") or "").strip()
-            legacy_sni = str(rs.get("sni") or rs.get("server_name") or ib.get("server_name") or ib.get("sni") or "is1-ssl.mzstatic.com").strip()
+            legacy_sni = str(rs.get("sni") or rs.get("server_name") or ib.get("server_name") or ib.get("sni") or "gateway.icloud.com").strip()
             legacy_sni = _normalize_reality_sni(legacy_sni)
             legacy_dest = _normalize_reality_destination(legacy_dest or (legacy_sni + ":443"))
             rs["dest"] = legacy_dest
@@ -3316,7 +3329,7 @@ async def update_inbound(inbound_id: str, request: Request, _=Depends(require_au
                 or body.get("sni")
                 or ib.get("server_name")
                 or ib.get("sni")
-                or "is1-ssl.mzstatic.com"
+                or "gateway.icloud.com"
             ).strip()
             sni_v = _normalize_reality_sni(sni_v)
             dest_v = _normalize_reality_destination(dest_v or (sni_v + ":443"))
@@ -3427,7 +3440,7 @@ async def generate_inbound_reality_keys(inbound_id: str, _=Depends(require_auth)
             rs["private_key"], rs["public_key"] = _xray_x25519_keypair()
             rs["short_id"] = secrets.token_hex(5)[:10]
             rs.setdefault("spiderx", "/")
-            rs.setdefault("dest", "is1-ssl.mzstatic.com:443")
+            rs.setdefault("dest", "gateway.icloud.com:443")
             ib["security"] = "reality"
             ib["protocol"] = "reality"
             if ib.get("network") not in ("tcp", "xhttp", "grpc"):
@@ -3640,8 +3653,8 @@ async def create_user(request: Request, _=Depends(require_panel_or_node)):
                 try:
                     reality["private_key"], reality["public_key"] = _xray_x25519_keypair()
                     reality.setdefault("short_id", secrets.token_hex(4)[:10])
-                    reality.setdefault("dest", "is1-ssl.mzstatic.com:443")
-                    reality.setdefault("sni", "is1-ssl.mzstatic.com")
+                    reality.setdefault("dest", "gateway.icloud.com:443")
+                    reality.setdefault("sni", "gateway.icloud.com")
                     reality.setdefault("spiderx", "/")
                     reality.setdefault("fingerprint", "chrome")
                     reality.setdefault("external_port", 443)
@@ -5998,7 +6011,7 @@ def generate_xray_server_config(inbound_id: str = None) -> dict:
     xray_config = {
         "log": {"loglevel": "warning"},
         "inbounds": [],
-        "outbounds": [{"protocol": "freedom", "tag": "direct"}],
+        "outbounds": [{"protocol": "freedom", "tag": "direct", "settings": {"domainStrategy": "UseIPv4"}}],
         "routing": {
             "domainStrategy": "IPIfNonMatch",
             "rules": []
@@ -6091,7 +6104,7 @@ def _add_inbound_to_xray(cfg: dict, ib: dict, iid: str, host: str):
         # SNI/Destination/Server Names. Do not silently replace it with a
         # hard-coded target, otherwise the client SNI and Xray destination can
         # describe different TLS targets.
-        rs_sni = _normalize_reality_sni(str(rs.get("sni") or ib.get("sni") or "is1-ssl.mzstatic.com").strip())
+        rs_sni = _normalize_reality_sni(str(rs.get("sni") or ib.get("sni") or "gateway.icloud.com").strip())
         rs_dest = _normalize_reality_destination(str(rs.get("dest") or rs.get("target") or (rs_sni + ":443")).strip())
         rs_server_names = rs.get("server_names") or rs.get("serverNames") or [rs_sni]
         if isinstance(rs_server_names, str):
@@ -6107,7 +6120,7 @@ def _add_inbound_to_xray(cfg: dict, ib: dict, iid: str, host: str):
                 "xver": 0,
                 "serverNames": rs_server_names,
                 "privateKey": rs.get("private_key", ""),
-                "shortIds": [str(rs.get("short_id") or rs.get("short_ids") or "5a3ff5a13d").split(",")[0].strip()],
+                "shortIds": [s.strip() for s in str(rs.get("short_id") or rs.get("short_ids") or "").split(",") if s.strip()] or generate_random_short_ids(),
                 "spiderX": rs.get("spiderx", "/"),
                 "mldsa65Seed": rs.get("mldsa65_seed", ""),
                 "settings": {
